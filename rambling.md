@@ -9,7 +9,23 @@ Implement a k-means clustering algorithm on the dataset, clustering by genre.
 4) Repeat steps 2 and 3 until convergence.
 
 #### Detailed Process
-So, how the fuck do I actually implement k-means clustering here? K-means relies on distance
+So, how the fuck do I actually implement k-means clustering here? K-means relies on distance. 
+So, gotta create some way to measure distance. At a very basic level I could start with a one-
+dimensional measure like danceability, then the implementation of kmeans is trivial, if a bit 
+useless due to fitting 1m songs in a 0-1 range. The solution is to add more dimensions, and 
+thankfully I got plenty of dimensions to work with. Expanding to higher dimensions using the 
+various float and integer values is very easy, and can get me pretty far (probably).
+
+Issue: handling string values. It's impossible, without implementing one-hot-encoding (or 
+similar). And since these are relatively unique string values (names and such), that's not going 
+to be very useful (one-hot-encoding is more for categories). That cuts out six of the columns. 
+Year can just be an integer dimension, and bools work as 0/1 just fine.
+
+That means I'll have 17 workable dimensions (or features or whatever). Track and disc number 
+feel pretty useless in determining genre, bringing it down to 15 features that I feel are 
+reasonable factors in guessing a song's genre. Should be enough for a decent kmeans clustering.
+
+This also means I can cull a decent amount of data from the dataset. I'll keep the id for ref.
 
 
 
@@ -50,6 +66,8 @@ Relevant statistics are:
 - speechiness
 - acousticness
 - instrumentalness
+- artist_ids, artists (artists generally stick to one genre)
+- album_id, album (albums are generally one genre)
 - liveness
 - valence
 - tempo
@@ -57,8 +75,6 @@ Relevant statistics are:
 - time_signature
 - year
 - release_date
-- artist_ids, artists (artists generally stick to one genre)
-- album_id, album (albums are generally one genre)
 - explicit (certain genres are more likely to be explicit)
 - name (perhaps similar names are similar genres?)
 - album (perhaps similar titles are similar genres?)
