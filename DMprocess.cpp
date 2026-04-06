@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <mpi.h>
+#include <vector>
+#include "rapidcsv.h" // library for easily importing csvs
 
 
 int main(void) {
@@ -23,6 +25,8 @@ int main(void) {
 
     // process 0 reads file into memory
     if (my_rank == 0) {
+        rapidcsv::Document source("culled_tracks_features.csv");
+        std::vector<float> col = source.GetColumn<float>("loudness");
         
     }
 
