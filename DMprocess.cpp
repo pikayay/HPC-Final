@@ -5,11 +5,13 @@
 //             generate output and visualization
 
 // will be using MPI
+// note compile with mpic++ file -o out, run with mpiexec -n <threads> -ppn <processes-per-node> <file>
 
 #include <stdio.h>
 #include <string.h>
 #include <mpi.h>
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include "rapidcsv.h" // library for easily importing csvs
 
@@ -25,7 +27,13 @@ int main(void) {
     int comm_sz; // threadcount
     int my_rank; // rank
     srand(4);
-    int CLUSTERS = 10;
+    const int CLUSTERS = 10;
+    const int features_count = 15;
+
+    // vars for distributing data
+    int total_rows = 0;
+    std::vector<float> all_data; // big vector, populated on p0
+    float clusters[CLUSTERS][15]; // shared centroids
 
     // initialize MPI
     MPI_Init(NULL, NULL);
@@ -36,22 +44,78 @@ int main(void) {
     // process 0 reads file into memory
     if (my_rank == 0) {
         rapidcsv::Document source("super_culled_tracks_features.csv");
-        // every included col (besides id) can be a float.
-        std::vector<float> col = source.GetColumn<float>("loudness"); // ex
+        total_rows = source.GetRowCount();
+
+        // features extracted, in order
+        std::vector<std::string> feature_names = {
+            "explicit", "danceability", "energy", "key", "loudness", "mode", "speechiness", 
+            "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
+            "time_signature", "year"
+        };
         
-        // create some clusters (let's say ten)
-        // every point in this space is a list of size 15.
-        float clusters[CLUSTERS][15];
-        for (int cluster = 0; cluster < CLUSTERS; cluster++) {
-            clusters[cluster][0] = std::round(bounded_rand(0, 1));   // explicit 0/1
-            clusters[cluster][1] = bounded_rand(0, 1);               // danceability 0-1
-            clusters[cluster][2] = bounded_rand(0, 1);               // energy 0-1
-            clusters[cluster][3] = std:round(bounded_rand(0, 11));   // key 0-11
-            clusters[cluster][4] = bounded_rand(-60, 7.23);          // loudness -60-7.23 db (weird)
-            clusters[cluster][5] = std::round(bounded_rand(0, 1));   // mode 0/1 minor/major
-            
+        printf("Read %d rows\n", total_rows);
+        
+        // squish that nice data format down into a 1d vector
+        // looks like [ex, da, en, ke, lo, mo, sp, ac, in, li, va, tp, du, ts, yr...]
+        // so a song would be 15 elements in a row, then the next 15 are another song.
+        // doing this for better MPI_Send functionality
+        all_data.resize(total_rows * features_count);
+        for (int f = 0; f < features_count; f++) {
+            std::vector<float> col = source.GetColumn<float>(feature_names[f]);
+            for (int r = 0; r < total_rows; r++) {
+                all_data[r * features_count + f] = col[r];
+            }
         }
         
+        // create some clusters
+        // every point in this space is a list of size 15.
+        for (int cluster = 0; cluster < CLUSTERS; cluster++) {
+            clusters[cluster][0] = std::round(bounded_rand(0, 1));          // explicit 0/1
+            clusters[cluster][1] = bounded_rand(0, 1);                      // danceability 0-1
+            clusters[cluster][2] = bounded_rand(0, 1);                      // energy 0-1
+            clusters[cluster][3] = std::round(bounded_rand(0, 11));         // key 0-11
+            clusters[cluster][4] = bounded_rand(-60, 7.23);                 // loudness -60-7.23 db (weird)
+            clusters[cluster][5] = std::round(bounded_rand(0, 1));          // mode 0/1 minor/major
+            clusters[cluster][6] = bounded_rand(0, 1);                      // "speechiness" 0-1
+            clusters[cluster][7] = bounded_rand(0, 1);                      // "acousticness" 0-1
+            clusters[cluster][8] = bounded_rand(0, 1);                      // "instrumentalness" 0-1
+            clusters[cluster][9] = bounded_rand(0, 1);                      // "liveness" 0-1
+            clusters[cluster][10] = bounded_rand(0, 1);                     // valence 0-1
+            clusters[cluster][11] = bounded_rand(0, 249);                   // tempo 0-249
+            clusters[cluster][12] = bounded_rand(0, 6000000);               // duration 0-6m ms
+            clusters[cluster][13] = std::round(bounded_rand(0, 5));         // time signature (vast majority 3/4)
+            clusters[cluster][14] = std::round(bounded_rand(1900, 2024));   // year
+        }
+    }
+
+    // broadcast the total number of rows and initial clusters to all ranks
+    MPI_Bcast(&total_rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(clusters, CLUSTERS * features_count, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    // calculate row distribution for this process (divide fairly)
+    int base_rows = total_rows / comm_sz;
+    int remainder = total_rows % comm_sz;
+    int my_rows = base_rows + (my_rank < remainder ? 1 : 0);
+    
+    // allocate memory for this process's local chunk of data
+    std::vector<float> my_data(my_rows * features_count);
+
+    if (my_rank == 0) {
+        int offset = my_rows * features_count; // start sending after rank 0's portion
+
+        // now process 0 needs to send chunks of memory to different processes
+        for (int i = 1; i < comm_sz; i++) {
+            int rows_for_i = base_rows + (i < remainder ? 1 : 0);
+            int size_for_i = rows_for_i * features_count;
+            MPI_Send(all_data.data() + offset, size_for_i, MPI_FLOAT, i, 0, MPI_COMM_WORLD);
+            offset += size_for_i;
+        }
+        // rank 0 copies its own portion locally
+        std::copy(all_data.begin(), all_data.begin() + (my_rows * features_count), my_data.begin());
+    } else {
+        // worker processes receive their chunks from rank 0
+        MPI_Recv(my_data.data(), my_rows * features_count, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
     }
 
     // 1) k initial "means" are randomly generated within the data domain.
