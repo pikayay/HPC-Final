@@ -281,6 +281,8 @@ int main(void) {
             outfile << all_assignments[r] << "\n";
         }
 
+        // should be noted that the "explicit" feature is now 0/1, not "True"/"False".
+
         outfile.close();
         printf("Output successfully written to cpu-dist-results.csv.\n");
     }
