@@ -127,45 +127,31 @@ int main(void) {
     } else {
         // worker processes receive their chunks from rank 0
         MPI_Recv(my_data.data(), my_rows * features_count, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        
-        // for every song (15 entries in my_data), compute the nearest cluster.
     }
 
-    // 1) k initial "means" are randomly generated within the data domain. (Done)
-    // 2) k clusters are created by associating every observation with the nearest mean.
-    // 3) The centroid of each of the k clusters becomes the new mean.
-    // 4) Repeat steps 2 and 3 until convergence.
 
-    for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
-        // These are for calculating the new centroids. We need local sums and counts.
+    // steps 2-4, now that the data's been distributed:
+    for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+        // local sums and counts to calculate new centroids later
         std::vector<float> local_cluster_sums(CLUSTERS * features_count, 0.0f);
         std::vector<int> local_cluster_counts(CLUSTERS, 0);
 
-        // --- STEP 2: ASSIGNMENT ---
-        // Each process assigns its local points to the nearest cluster.
+        // STEP 2 ----
+        // each process assigns its local points to the nearest cluster.
         for (int rowID = 0; rowID < my_rows; rowID++) {
-            float cluster_distances[CLUSTERS];
-            float min_dist = 9999;
-            // for every cluster, compute the distances.
             float min_dist_sq = std::numeric_limits<float>::max();
             int assigned_cluster = -1;
 
-            // Find the nearest cluster for the current data point.
+            // find the nearest cluster for the current data point.
             for (int clusterID = 0; clusterID < CLUSTERS; clusterID++) {
-                float dist = 0;
-                // for every feature in the cluster, compute distances, normalize, and add to total dist
                 float dist_sq = 0;
                 for (int featureID = 0; featureID < features_count; featureID++) {
                     // this will be between 0 and 1 ideally. 
                     float diff = (my_data[rowID * features_count + featureID] - clusters[clusterID][featureID]) / featureRanges[featureID];
-                    dist += diff * diff; // distances are squared to avoid pos/neg annoyances
                     dist_sq += diff * diff;
                 }
 
                 // if this is the closest cluster, classify the song as such
-                if (dist < min_dist) {
-                    min_dist = dist;
-                    song_assignments[rowID] = clusterID;
                 if (dist_sq < min_dist_sq) {
                     min_dist_sq = dist_sq;
                     assigned_cluster = clusterID;
@@ -173,45 +159,31 @@ int main(void) {
             }
             song_assignments[rowID] = assigned_cluster;
 
-            // add this song's values to the cluster's running sums to average later
-            // Add this point's data to the local sums for its assigned cluster.
+            // add this point's data to the local sums for its assigned cluster.
             local_cluster_counts[assigned_cluster]++;
             for (int featureID = 0; featureID < features_count; featureID++) {
-                cluster_sums[song_assignments[rowID]][featureID] += my_data[rowID * features_count + featureID];
                 local_cluster_sums[assigned_cluster * features_count + featureID] += my_data[rowID * features_count + featureID];
             }
         }
 
-        // average running sums for the new centroids
-        for (int clusterID = 0; clusterID < CLUSTERS; clusterID++) {
-            for (int featureID = 0; featureID < features_count; featureID++) {
-                cluster_sums[clusterID][featureID] /= my_rows;
-        // --- STEP 3: UPDATE ---
-        // Aggregate the local sums and counts to get global sums and counts.
+        // STEP 3 ----
+        // do global sums on the cluster sums and counts
         std::vector<float> global_cluster_sums(CLUSTERS * features_count, 0.0f);
         std::vector<int> global_cluster_counts(CLUSTERS, 0);
         MPI_Allreduce(local_cluster_sums.data(), global_cluster_sums.data(), CLUSTERS * features_count, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(local_cluster_counts.data(), global_cluster_counts.data(), CLUSTERS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-        // Now, update the centroids based on the global aggregates.
-        for (int c = 0; c < CLUSTERS; ++c) {
-            if (global_cluster_counts[c] > 0) { // Avoid division by zero for empty clusters
+        // update centroids with global sums/counts
+        for (int c = 0; c < CLUSTERS; c++) {
+            if (global_cluster_counts[c] > 0) { // avoid zero division error for empty clusters
                 for (int f = 0; f < features_count; ++f) {
                     clusters[c][f] = global_cluster_sums[c * features_count + f] / global_cluster_counts[c];
                 }
             }
-            // Optional: Handle empty clusters, e.g., by re-initializing them.
+            // empty clusters might need to be handled? unlikely?
         }
-
-        // send new centroids back to thread 0.
-        MPI_Send(cluster_sums, CLUSTERS * features_count, MPI_FLOAT, 1, my_rank, MPI_COMM_WORLD);
+        // repeat until convergence / termination
     }
-
-    // 1) k initial "means" are randomly generated within the data domain.
-    // 2) k clusters are created by associating every observation with the nearest mean.
-    // 3) The centroid of each of the k clusters becomes the new mean.
-    // 4) Repeat steps 2 and 3 until convergence.
-
 
 
     MPI_Finalize();
