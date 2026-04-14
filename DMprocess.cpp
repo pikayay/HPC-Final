@@ -115,8 +115,6 @@ int main(void) {
             clusters[cluster][13] = std::round(bounded_rand(0, 5));         // time signature (vast majority 3/4)
             clusters[cluster][14] = std::round(bounded_rand(1900, 2024));   // year
         }
-
-        printf("cluster gen done");
     }
 
     // broadcast the total number of rows and initial clusters to all ranks
@@ -208,13 +206,22 @@ int main(void) {
             // empty clusters might need to be handled? unlikely?
         }
         // repeat until convergence / termination
+
+        // reporting clusters
         if (my_rank == 0) {
-            printf("cycle %d", iter);
+            printf("cycle %d:\n", iter);
+            for (int clusterID = 0; clusterID < CLUSTERS; clusterID++) {
+                printf("cluster %d: ", clusterID);
+                for (int featureID = 0; featureID < features_count; featureID++) {
+                    printf("%f, ", clusters[clusterID][featureID]);
+                }
+                printf("\n");
+            }
         }
     }
 
     if (my_rank == 0) {
-        printf("completed correctly");
+        printf("\ncompleted correctly");
     }
 
     MPI_Finalize();
