@@ -53,7 +53,7 @@ int main(void) {
 
     // process 0 reads file into memory
     if (my_rank == 0) {
-        rapidcsv::Document source("super_culled_tracks_features.csv");
+        rapidcsv::Document source("culled_tracks_features.csv");
         total_rows = source.GetRowCount();
 
         // features extracted, in order
@@ -135,24 +135,30 @@ int main(void) {
     // for every row, store its cluster assignments
     std::vector<int> song_assignments(my_rows);
 
-    if (my_rank == 0) {
-        int offset = my_rows * features_count; // start sending after rank 0's portion
+    // gonna distribute data from thread 0 to all threads using scatterv
+    // so here's the necessary arrays:
+    std::vector<int> scatter_sendcounts;
+    std::vector<int> scatter_displs;
 
-        // now process 0 needs to send chunks of memory to different processes
-        for (int i = 1; i < comm_sz; i++) {
+    if (my_rank == 0) {
+        scatter_sendcounts.resize(comm_sz);
+        scatter_displs.resize(comm_sz);
+        int current_displ = 0;
+        // calculate send counts and displacements for the data scattering
+        for (int i = 0; i < comm_sz; i++) {
             int rows_for_i = base_rows + (i < remainder ? 1 : 0);
-            int size_for_i = rows_for_i * features_count;
-            MPI_Send(all_data.data() + offset, size_for_i, MPI_FLOAT, i, 0, MPI_COMM_WORLD);
-            offset += size_for_i;
+            scatter_sendcounts[i] = rows_for_i * features_count; // # of floats i gets
+            scatter_displs[i] = current_displ;
+            current_displ += scatter_sendcounts[i]; // skip forward that # of floats for next displacement
         }
-        // rank 0 copies its own portion locally
-        std::copy(all_data.begin(), all_data.begin() + (my_rows * features_count), my_data.begin());
-        printf("Data distributed to all processes.\n");
-    } else {
-        // worker processes receive their chunks from rank 0
-        MPI_Recv(my_data.data(), my_rows * features_count, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
+    // scatter everything out from p0 to all threads
+    MPI_Scatterv(all_data.data(), scatter_sendcounts.data(), scatter_displs.data(), MPI_FLOAT,
+                 my_data.data(), my_rows * features_count, MPI_FLOAT,
+                 0, MPI_COMM_WORLD);
+
+    if (my_rank == 0) printf("Data distributed to all processes via Scatterv.\n");
 
     // steps 2-4, now that the data's been distributed:
     for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
@@ -210,9 +216,9 @@ int main(void) {
 
         // reporting clusters
         if (my_rank == 0) {
-            printf("cycle %d:\n", iter);
+            printf("Cycle %d:\n", iter);
             for (int clusterID = 0; clusterID < CLUSTERS; clusterID++) {
-                printf("cluster %d: ", clusterID);
+                printf("Cluster %d: ", clusterID);
                 for (int featureID = 0; featureID < features_count; featureID++) {
                     printf("%f, ", clusters[clusterID][featureID]);
                 }
