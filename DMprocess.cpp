@@ -19,9 +19,9 @@
 
 
 // helper function to generate a random float between two points.
-float bounded_rand(int low, int high) {
-    float width = high - low;
-    return ((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * width);
+float bounded_rand(float low, float high) {
+    float range = high - low;
+    return low + ((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * range);
 }
 
 
@@ -100,21 +100,21 @@ int main(void) {
         // create some clusters
         // every point in this space is a list of size 15.
         for (int cluster = 0; cluster < CLUSTERS; cluster++) {
-            clusters[cluster][0] = std::round(bounded_rand(0, 1));          // explicit 0/1
-            clusters[cluster][1] = bounded_rand(0, 1);                      // danceability 0-1
-            clusters[cluster][2] = bounded_rand(0, 1);                      // energy 0-1
-            clusters[cluster][3] = std::round(bounded_rand(0, 11));         // key 0-11
-            clusters[cluster][4] = bounded_rand(-60, 7.23);                 // loudness -60-7.23 db (weird)
-            clusters[cluster][5] = std::round(bounded_rand(0, 1));          // mode 0/1 minor/major
-            clusters[cluster][6] = bounded_rand(0, 1);                      // "speechiness" 0-1
-            clusters[cluster][7] = bounded_rand(0, 1);                      // "acousticness" 0-1
-            clusters[cluster][8] = bounded_rand(0, 1);                      // "instrumentalness" 0-1
-            clusters[cluster][9] = bounded_rand(0, 1);                      // "liveness" 0-1
-            clusters[cluster][10] = bounded_rand(0, 1);                     // valence 0-1
-            clusters[cluster][11] = bounded_rand(0, 249);                   // tempo 0-249
-            clusters[cluster][12] = bounded_rand(1, 6000000);               // duration 0-6m ms
-            clusters[cluster][13] = std::round(bounded_rand(0, 5));         // time signature (vast majority 3/4)
-            clusters[cluster][14] = std::round(bounded_rand(1900, 2024));   // year
+            clusters[cluster][0] = std::round(bounded_rand(0.0f, 1.0f));         // explicit 0/1
+            clusters[cluster][1] = bounded_rand(0.0f, 1.0f);                     // danceability 0-1
+            clusters[cluster][2] = bounded_rand(0.0f, 1.0f);                     // energy 0-1
+            clusters[cluster][3] = std::round(bounded_rand(0.0f, 11.0f));        // key 0-11
+            clusters[cluster][4] = bounded_rand(-60.0f, 7.23f);                  // loudness -60-7.23 db (weird)
+            clusters[cluster][5] = std::round(bounded_rand(0.0f, 1.0f));         // mode 0/1 minor/major
+            clusters[cluster][6] = bounded_rand(0.0f, 1.0f);                     // "speechiness" 0-1
+            clusters[cluster][7] = bounded_rand(0.0f, 1.0f);                     // "acousticness" 0-1
+            clusters[cluster][8] = bounded_rand(0.0f, 1.0f);                     // "instrumentalness" 0-1
+            clusters[cluster][9] = bounded_rand(0.0f, 1.0f);                     // "liveness" 0-1
+            clusters[cluster][10] = bounded_rand(0.0f, 1.0f);                    // valence 0-1
+            clusters[cluster][11] = bounded_rand(0.0f, 249.0f);                  // tempo 0-249
+            clusters[cluster][12] = bounded_rand(1.0f, 6000000.0f);              // duration 0-6m ms
+            clusters[cluster][13] = std::round(bounded_rand(0.0f, 5.0f));        // time signature (vast majority 3/4)
+            clusters[cluster][14] = std::round(bounded_rand(1900.0f, 2024.0f));  // year
         }
     }
 
@@ -122,7 +122,7 @@ int main(void) {
     MPI_Bcast(&total_rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(clusters, CLUSTERS * features_count, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    printf("post broadcast\n");
+    if (my_rank == 0) printf("Initial clusters broadcasted.\n");
 
     // calculate row distribution for this process (divide fairly)
     int base_rows = total_rows / comm_sz;
@@ -147,7 +147,7 @@ int main(void) {
         }
         // rank 0 copies its own portion locally
         std::copy(all_data.begin(), all_data.begin() + (my_rows * features_count), my_data.begin());
-        printf("data sent\n");
+        printf("Data distributed to all processes.\n");
     } else {
         // worker processes receive their chunks from rank 0
         MPI_Recv(my_data.data(), my_rows * features_count, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
