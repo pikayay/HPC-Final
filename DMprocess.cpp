@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <fstream>
 #include "rapidcsv.h" // library for easily importing csvs
 
 
@@ -146,7 +147,7 @@ int main(void) {
         }
         // rank 0 copies its own portion locally
         std::copy(all_data.begin(), all_data.begin() + (my_rows * features_count), my_data.begin());
-        printf("data sent");
+        printf("data sent\n");
     } else {
         // worker processes receive their chunks from rank 0
         MPI_Recv(my_data.data(), my_rows * features_count, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -220,8 +221,68 @@ int main(void) {
         }
     }
 
+    // now that everything is clustered it's time for output:
+    // that output should be one csv with the categorization of songs
+    // and a sample visualization with 3 feature axis to show clustering.
+    // so, just add a column to the csv with the assigned cluster and save.
+    
+    std::vector<int> all_assignments;   // all song classifications
+    std::vector<int> recvcounts;        // elements expected to receive from each process
+    std::vector<int> displs;            // displacements for each reception
+
     if (my_rank == 0) {
-        printf("\ncompleted correctly");
+        all_assignments.resize(total_rows);
+        recvcounts.resize(comm_sz);
+        displs.resize(comm_sz);
+
+        // calculate expected items and displacements for each thread.
+        int current_displ = 0;
+        for (int i = 0; i < comm_sz; ++i) {
+            int rows_for_i = base_rows + (i < remainder ? 1 : 0);
+            recvcounts[i] = rows_for_i;
+            displs[i] = current_displ;
+            current_displ += rows_for_i;
+        }
+    }
+
+    // MPI_Gatherv sends my_rows # of integers from song_assignments to the root.
+    // root uses recvcounts and displs to correctly place the incoming data into all_assignments.
+    // using gatherv since the data sizes sent are variable.
+    MPI_Gatherv(song_assignments.data(), my_rows, MPI_INT,
+                all_assignments.data(), recvcounts.data(), displs.data(),
+                MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (my_rank == 0) {
+        printf("Successfully gathered all %d song assignments on rank 0.\n", total_rows);
+
+        // write the original data + cluster assignments to a csv
+        std::ofstream outfile("cpu-dist-results.csv");
+
+        // original feature names (for header)
+        const std::vector<std::string> feature_names = {
+            "explicit", "danceability", "energy", "key", "loudness", "mode", "speechiness", 
+            "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
+            "time_signature", "year"
+        };
+
+        // write header with original features + clustering to csv
+        for (const auto& name : feature_names) {
+            outfile << name << ",";
+        }
+        outfile << "cluster_id\n"; 
+
+        // write data to csv
+        for (int r = 0; r < total_rows; r++) {
+            for (int f = 0; f < features_count; f++) {
+                // original features
+                outfile << all_data[r * features_count + f] << ",";
+            }
+            // clustering assignments
+            outfile << all_assignments[r] << "\n";
+        }
+
+        outfile.close();
+        printf("Output successfully written to cpu-dist-results.csv.\n");
     }
 
     MPI_Finalize();
