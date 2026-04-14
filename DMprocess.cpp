@@ -61,20 +61,40 @@ int main(void) {
             "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
             "time_signature", "year"
         };
-        
-        printf("Read %d rows\n", total_rows);
-        
-        // squish that nice data format down into a 1d vector
-        // looks like [ex, da, en, ke, lo, mo, sp, ac, in, li, va, tp, du, ts, yr...]
-        // so a song would be 15 elements in a row, then the next 15 are another song.
-        // doing this for better MPI_Send functionality
+
         all_data.resize(total_rows * features_count);
-        for (int f = 0; f < features_count; f++) {
-            std::vector<float> col = source.GetColumn<float>(feature_names[f]);
-            for (int r = 0; r < total_rows; r++) {
-                all_data[r * features_count + f] = col[r];
+
+        // preload everything from the csv into columns of features
+        std::vector<std::vector<float>> data_by_column;
+        data_by_column.reserve(features_count);
+        for (const auto& name : feature_names) {
+            // special data handling for string field; could also clean data beforehand
+            if (name == "explicit") {
+                std::vector<std::string> explicit_str_col = source.GetColumn<std::string>(name);
+                std::vector<float> explicit_float_col;
+                explicit_float_col.reserve(explicit_str_col.size());
+                // convert string booleans to 1.0f or 0.0f
+                for (const std::string& val : explicit_str_col) {
+                    explicit_float_col.push_back((val == "True") ? 1.0f : 0.0f);
+                }
+                data_by_column.push_back(explicit_float_col);
+            } else {
+                // everything else is numeric by default
+                data_by_column.push_back(source.GetColumn<float>(name));
             }
         }
+
+        // squish that nice data format down into a 1d vector
+        // [exp, dance, energy, key, loud, mode, speech, acoustic, instr, live, valence, tempo, duration, ts, yr...]
+        // so a song would be 15 elements in a row, then the next 15 are another song.
+        // doing this for better MPI_Send functionality.
+        for (int r = 0; r < total_rows; r++) {
+            for (int f = 0; f < features_count; f++) {
+                all_data[r * features_count + f] = data_by_column[f][r];
+            }
+        }
+        
+        printf("Read %d rows\n", total_rows);
         
         // create some clusters
         // every point in this space is a list of size 15.
@@ -95,11 +115,15 @@ int main(void) {
             clusters[cluster][13] = std::round(bounded_rand(0, 5));         // time signature (vast majority 3/4)
             clusters[cluster][14] = std::round(bounded_rand(1900, 2024));   // year
         }
+
+        printf("cluster gen done");
     }
 
     // broadcast the total number of rows and initial clusters to all ranks
     MPI_Bcast(&total_rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(clusters, CLUSTERS * features_count, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    printf("post broadcast\n");
 
     // calculate row distribution for this process (divide fairly)
     int base_rows = total_rows / comm_sz;
@@ -124,6 +148,7 @@ int main(void) {
         }
         // rank 0 copies its own portion locally
         std::copy(all_data.begin(), all_data.begin() + (my_rows * features_count), my_data.begin());
+        printf("data sent");
     } else {
         // worker processes receive their chunks from rank 0
         MPI_Recv(my_data.data(), my_rows * features_count, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -183,8 +208,14 @@ int main(void) {
             // empty clusters might need to be handled? unlikely?
         }
         // repeat until convergence / termination
+        if (my_rank == 0) {
+            printf("cycle %d", iter);
+        }
     }
 
+    if (my_rank == 0) {
+        printf("completed correctly");
+    }
 
     MPI_Finalize();
     return 0;
