@@ -1,3 +1,7 @@
+
+*
+!/**/
+!*.*
 *.csv
 *.Identifier
 rapidcsv.h

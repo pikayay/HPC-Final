@@ -18,27 +18,14 @@
 #include "rapidcsv.h" // library for easily importing csvs
 
 
-// helper function to generate a random float between two points.
-float bounded_rand(float low, float high) {
-    float range = high - low;
-    return low + ((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * range);
-}
-
-
 int main(void) {
     int comm_sz; // threadcount
     int my_rank; // rank
-    srand(4);
-    const int CLUSTERS = 10;
-    const int features_count = 15;
-    const int MAX_ITERATIONS = 20; // limit needed until convergence is figurd out
-
-    // hardcoded max distances for features, for normalization. may need tweaking.
-    // loudness in particular; isn't dB logarithmic or something?
-    // duration_ms i've truncated at 1mil instead of 6mil to weight it slightly higher
-    // the vast majority of the songs are between 1 and 500000ms. difficult to normalize.
-    // considering logging it.
-    const float featureRanges[features_count] = {1, 1, 1, 11, 67, 1, 1, 1, 1, 1, 1, 249, 1000000, 5, 124};
+    srand(42);
+    const int CLUSTERS = 8;
+    const int features_count = 14; // dropped explicit for now to match gpu
+    const int MAX_ITERATIONS = 100; // match gpu default
+    const float tol = 1e-4f; // convergence tolerance
 
     // vars for distributing data
     int total_rows = 0;
@@ -53,12 +40,12 @@ int main(void) {
 
     // process 0 reads file into memory
     if (my_rank == 0) {
-        rapidcsv::Document source("culled_tracks_features.csv");
+        rapidcsv::Document source("tracks_features_cleaned.csv");
         total_rows = source.GetRowCount();
 
-        // features extracted, in order
+        // features extracted, in order (dropped explicit)
         std::vector<std::string> feature_names = {
-            "explicit", "danceability", "energy", "key", "loudness", "mode", "speechiness", 
+            "danceability", "energy", "key", "loudness", "mode", "speechiness",
             "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
             "time_signature", "year"
         };
@@ -69,6 +56,10 @@ int main(void) {
         std::vector<std::vector<float>> data_by_column;
         data_by_column.reserve(features_count);
         for (const auto& name : feature_names) {
+            // ignore ID 
+            if (name == "id") {
+                continue;
+            }
             // special data handling for string field; could also clean data beforehand
             if (name == "explicit") {
                 std::vector<std::string> explicit_str_col = source.GetColumn<std::string>(name);
@@ -97,24 +88,42 @@ int main(void) {
         
         printf("Read %d rows\n", total_rows);
         
-        // create some clusters
-        // every point in this space is a list of size 15.
-        for (int cluster = 0; cluster < CLUSTERS; cluster++) {
-            clusters[cluster][0] = std::round(bounded_rand(0.0f, 1.0f));         // explicit 0/1
-            clusters[cluster][1] = bounded_rand(0.0f, 1.0f);                     // danceability 0-1
-            clusters[cluster][2] = bounded_rand(0.0f, 1.0f);                     // energy 0-1
-            clusters[cluster][3] = std::round(bounded_rand(0.0f, 11.0f));        // key 0-11
-            clusters[cluster][4] = bounded_rand(-60.0f, 7.23f);                  // loudness -60-7.23 db (weird)
-            clusters[cluster][5] = std::round(bounded_rand(0.0f, 1.0f));         // mode 0/1 minor/major
-            clusters[cluster][6] = bounded_rand(0.0f, 1.0f);                     // "speechiness" 0-1
-            clusters[cluster][7] = bounded_rand(0.0f, 1.0f);                     // "acousticness" 0-1
-            clusters[cluster][8] = bounded_rand(0.0f, 1.0f);                     // "instrumentalness" 0-1
-            clusters[cluster][9] = bounded_rand(0.0f, 1.0f);                     // "liveness" 0-1
-            clusters[cluster][10] = bounded_rand(0.0f, 1.0f);                    // valence 0-1
-            clusters[cluster][11] = bounded_rand(0.0f, 249.0f);                  // tempo 0-249
-            clusters[cluster][12] = bounded_rand(1.0f, 6000000.0f);              // duration 0-6m ms
-            clusters[cluster][13] = std::round(bounded_rand(0.0f, 5.0f));        // time signature (vast majority 3/4)
-            clusters[cluster][14] = std::round(bounded_rand(1900.0f, 2024.0f));  // year
+        // normalize features to 0-1 range.
+        // begin by getting the minimum and maximum of every feature
+        std::vector<float> fmin(features_count, std::numeric_limits<float>::max());
+        std::vector<float> fmax(features_count, -std::numeric_limits<float>::max());
+        // for every song:
+        for (int i = 0; i < total_rows; ++i) {
+            // for every feature:
+            for (int d = 0; d < features_count; ++d) {
+                // get the min and max
+                float val = all_data[i * features_count + d];
+                if (val < fmin[d]) fmin[d] = val;
+                if (val > fmax[d]) fmax[d] = val;
+            }
+        }
+        // now establish ranges for each feature and normalize the entries based on that
+        for (int i = 0; i < total_rows; ++i) {
+            for (int d = 0; d < features_count; ++d) {
+                float range = fmax[d] - fmin[d];
+                all_data[i * features_count + d] = (range > 0) ? (all_data[i * features_count + d] - fmin[d]) / range : 0.0f;
+            }
+        }
+
+        // initialize centroids by picking a random song
+        std::vector<int> indices;
+        while ((int)indices.size() < CLUSTERS) {
+            int idx = rand() % total_rows;
+            bool dup = false;
+            for (int x : indices) if (x == idx) { dup = true; break; }
+            if (!dup) indices.push_back(idx);
+        }
+
+        for (int c = 0; c < CLUSTERS; ++c) {
+            int row = indices[c];
+            for (int d = 0; d < features_count; ++d) {
+                clusters[c][d] = all_data[row * features_count + d];
+            }
         }
     }
 
@@ -160,6 +169,10 @@ int main(void) {
 
     if (my_rank == 0) printf("Data distributed to all processes via Scatterv.\n");
 
+    double start_time = 0;
+    if (my_rank == 0) start_time = MPI_Wtime();
+    bool converged = false;
+
     // steps 2-4, now that the data's been distributed:
     for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
         // local sums and counts to calculate new centroids later
@@ -176,8 +189,8 @@ int main(void) {
             for (int clusterID = 0; clusterID < CLUSTERS; clusterID++) {
                 float dist_sq = 0;
                 for (int featureID = 0; featureID < features_count; featureID++) {
-                    // this will be between 0 and 1 ideally. 
-                    float diff = (my_data[rowID * features_count + featureID] - clusters[clusterID][featureID]) / featureRanges[featureID];
+                    // data already normalized so no worries there
+                    float diff = my_data[rowID * features_count + featureID] - clusters[clusterID][featureID];
                     dist_sq += diff * diff;
                 }
 
@@ -203,27 +216,39 @@ int main(void) {
         MPI_Allreduce(local_cluster_sums.data(), global_cluster_sums.data(), CLUSTERS * features_count, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(local_cluster_counts.data(), global_cluster_counts.data(), CLUSTERS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
+        // store old centroids to check for convergence
+        float old_clusters[CLUSTERS][features_count];
+        memcpy(old_clusters, clusters, CLUSTERS * features_count * sizeof(float));
+
         // update centroids with global sums/counts
+        // this is done on all processes, so they all have the updated centroids
         for (int c = 0; c < CLUSTERS; c++) {
             if (global_cluster_counts[c] > 0) { // avoid zero division error for empty clusters
                 for (int f = 0; f < features_count; ++f) {
                     clusters[c][f] = global_cluster_sums[c * features_count + f] / global_cluster_counts[c];
                 }
             }
-            // empty clusters might need to be handled? unlikely?
+            // empty clusters keep their old centroid values (handled by memcpy earlier)
         }
-        // repeat until convergence / termination
 
-        // reporting clusters
-        if (my_rank == 0) {
-            printf("Cycle %d:\n", iter);
-            for (int clusterID = 0; clusterID < CLUSTERS; clusterID++) {
-                printf("Cluster %d: ", clusterID);
-                for (int featureID = 0; featureID < features_count; featureID++) {
-                    printf("%f, ", clusters[clusterID][featureID]);
+        // convergence check
+        float max_move = 0.0f;
+        for (int c = 0; c < CLUSTERS; c++) {
+            for (int f = 0; f < features_count; ++f) {
+                float move = std::fabs(clusters[c][f] - old_clusters[c][f]);
+                if (move > max_move) {
+                    max_move = move;
                 }
-                printf("\n");
             }
+        }
+
+        // report changes
+        if (my_rank == 0) {
+            printf("Iteration %d, max centroid movement: %f\n", iter, max_move);
+        }
+        if (max_move < tol) {
+            converged = true;
+            break; // all processes break synchronously
         }
     }
 
@@ -259,14 +284,21 @@ int main(void) {
                 MPI_INT, 0, MPI_COMM_WORLD);
 
     if (my_rank == 0) {
+        double end_time = MPI_Wtime();
+        printf("K-means finished%s in %.4f s\n",
+               (converged ? " (converged)" : " (max iterations)"),
+               end_time - start_time);
+    }
+
+    if (my_rank == 0) {
         printf("Successfully gathered all %d song assignments on rank 0.\n", total_rows);
 
         // write the original data + cluster assignments to a csv
         std::ofstream outfile("cpu-dist-results.csv");
 
-        // original feature names (for header)
+        // original feature names (for header) (dropped explicit)
         const std::vector<std::string> feature_names = {
-            "explicit", "danceability", "energy", "key", "loudness", "mode", "speechiness", 
+            "danceability", "energy", "key", "loudness", "mode", "speechiness",
             "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
             "time_signature", "year"
         };
@@ -275,7 +307,7 @@ int main(void) {
         for (const auto& name : feature_names) {
             outfile << name << ",";
         }
-        outfile << "cluster_id\n"; 
+        outfile << "cluster\n"; 
 
         // write data to csv
         for (int r = 0; r < total_rows; r++) {
@@ -286,8 +318,6 @@ int main(void) {
             // clustering assignments
             outfile << all_assignments[r] << "\n";
         }
-
-        // should be noted that the "explicit" feature is now 0/1, not "True"/"False".
 
         outfile.close();
         printf("Output successfully written to cpu-dist-results.csv.\n");

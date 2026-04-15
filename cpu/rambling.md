@@ -89,3 +89,15 @@ Overlaps:
 songs in an album together.
 - artists, artist_ids: similar logic as above.
 - year, release_date: same info, one's more precise. could likely just use year.
+
+
+### to-do
+- ensure input csvs for gpu and cpu implementations are the same (just use the established csv_parser file)
+ - it seems like the established cpu implementation can handle the new file just fine :)
+- check that the results from the cpu and gpu versions are the same.
+ - okay it looks like the GPU version just skips explicitness entirely as a feature ?
+
+#### differences:
+- gpu implementation ignores the explicit feature
+- gpu normalizes with min/max of each feature prior to doing the algorithm
+- 
