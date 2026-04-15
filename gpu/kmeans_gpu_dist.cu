@@ -37,7 +37,7 @@
 #include <string>
 #include <vector>
 
-static constexpr int D = 14;
+static constexpr int D = 15;
 static constexpr int BLOCK_SIZE = 256;
 
 // CUDA call wrapper: abort the whole MPI job on failure so ranks do not hang.
@@ -74,6 +74,22 @@ static std::vector<std::string> parse_csv_line(const std::string& line) {
   return result;
 }
 
+// Parse numeric feature tokens and boolean-like tokens (true/false, 1/0).
+static float parse_feature_value(std::string token) {
+  for (char& c : token) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  if (token == "true") return 1.0f;
+  if (token == "false" || token == "flase") return 0.0f;
+  if (token == "1") return 1.0f;
+  if (token == "0") return 0.0f;
+  try {
+    return std::stof(token);
+  } catch (...) {
+    return 0.0f;
+  }
+}
+
 // Read dataset after header: fills ids and flat features (row-major). Same contract as single-GPU.
 static bool load_dataset(const std::string& path, std::vector<std::string>& ids,
                          std::vector<float>& features) {
@@ -101,12 +117,7 @@ static bool load_dataset(const std::string& path, std::vector<std::string>& ids,
     }
     ids.push_back(cols[0]);
     for (int d = 0; d < D; ++d) {
-      float v = 0.0f;
-      try {
-          v = std::stof(cols[2 + d]);
-      } catch (...) {
-          v = 0.0f;
-      }
+      float v = parse_feature_value(cols[1 + d]);
       features.push_back(v);
     }
     ++row;
@@ -502,7 +513,7 @@ int main(int argc, char** argv) {
       std::cerr << "Error: could not write " << out_csv << "\n";
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    out << "danceability,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,time_signature,year,cluster\n";
+    out << "explicit,danceability,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,time_signature,year,cluster\n";
     for (int i = 0; i < n; ++i) {
       for (int d = 0; d < D; ++d) {
         out << features[i * D + d] << ",";
