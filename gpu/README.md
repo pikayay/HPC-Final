@@ -54,6 +54,18 @@ The distributed memory GPU implementation was tested across 2, 3, and 4 nodes on
 
 The scaling behavior reveals a hardware and network constraint on the cluster. Moving from 2 to 3 nodes shows a clear performance improvement. However, scaling to 4 nodes results in a higher average runtime. Looking closely at the 4-node data, the performance exhibited a severe bimodal distribution. Exactly half of the 10 runs finished rapidly (around 0.05 seconds), while the other half clustered at the extreme high end (over 0.12 seconds), with zero runs falling in between. This distinct split heavily indicates the execution became unpredictably network bound based on the physical location of the GPUs allocated by the SLURM scheduler. When SLURM allocates 4 nodes within the same physical rack, the MPI communication benefits from low latency switches. If the nodes are scattered across different racks, the MPI traffic must traverse the core network, exposing it to physical distance latency and cluster traffic contention which more than doubles the runtime.
 
+### **Validation and Numerical Precision**
+
+To ensure the parallel implementations produce correct results, a Python validation script compares the output CSVs against the serial baseline. 
+
+Usage:
+python validate.py serial_results.csv parallel_results.csv
+
+Note on Numerical Precision:
+When comparing parallel results to the serial baseline, a microscopic divergence in cluster assignments is expected. The serial CPU implementation adds coordinates sequentially, while the GPU implementations aggregate data non-deterministically using atomic operations or network-based MPI reductions. 
+
+Because floating-point addition is not perfectly associative, these different reduction orders result in minor decimal variations in the final centroids. Over many iterations, data points resting exactly on the mathematical boundary between clusters may be classified differently. The validation script calculates this mismatch percentage and passes the check if it falls within an acceptable high performance computing tolerance.
+
 ### **Team Task Breakdown**
 
 * **Person B:** Responsible for the single GPU implementation (Implementation 3), the distributed GPU implementation (Implementation 5), the GPU block size study, the distributed GPU node scaling study, and writing the CHPC build and execution instructions for the GPU codebase.

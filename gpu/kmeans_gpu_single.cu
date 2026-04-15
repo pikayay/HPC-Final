@@ -338,8 +338,9 @@ int main(int argc, char** argv) {
     std::cerr << "Error: could not write " << out_csv << "\n";
     return 1;
   }
-  out << "explicit,danceability,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,time_signature,year,cluster\n";
+  out << "id,explicit,danceability,energy,key,loudness,mode,speechiness,acousticness,instrumentalness,liveness,valence,tempo,duration_ms,time_signature,year,cluster\n";
   for (int i = 0; i < n; ++i) {
+    out << ids[i] << ",";
     for (int d = 0; d < D; ++d) {
       out << features[i * D + d] << ",";
     }
