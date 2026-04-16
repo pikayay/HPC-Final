@@ -23,13 +23,14 @@ int main(void) {
     int my_rank; // rank
     srand(42);
     const int CLUSTERS = 8;
-    const int features_count = 14; // dropped explicit for now to match gpu
+    const int features_count = 15; 
     const int MAX_ITERATIONS = 100; // match gpu default
     const float tol = 1e-4f; // convergence tolerance
 
     // vars for distributing data
     int total_rows = 0;
     std::vector<float> all_data; // big vector, populated on p0
+    std::vector<std::string> ids;     // populated on p0 so we don't gotta load the csv twice
     float clusters[CLUSTERS][features_count]; // shared centroids
 
     // initialize MPI
@@ -42,10 +43,13 @@ int main(void) {
     if (my_rank == 0) {
         rapidcsv::Document source("tracks_features_cleaned.csv");
         total_rows = source.GetRowCount();
+        
+        // Load IDs separately. They are only needed on rank 0 for the final output.
+        ids = source.GetColumn<std::string>("id");
 
-        // features extracted, in order (dropped explicit)
+        // features extracted for clustering, in order
         std::vector<std::string> feature_names = {
-            "danceability", "energy", "key", "loudness", "mode", "speechiness",
+            "explicit", "danceability", "energy", "key", "loudness", "mode", "speechiness",
             "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
             "time_signature", "year"
         };
@@ -56,10 +60,6 @@ int main(void) {
         std::vector<std::vector<float>> data_by_column;
         data_by_column.reserve(features_count);
         for (const auto& name : feature_names) {
-            // ignore ID 
-            if (name == "id") {
-                continue;
-            }
             // special data handling for string field; could also clean data beforehand
             if (name == "explicit") {
                 std::vector<std::string> explicit_str_col = source.GetColumn<std::string>(name);
@@ -296,9 +296,9 @@ int main(void) {
         // write the original data + cluster assignments to a csv
         std::ofstream outfile("cpu-dist-results.csv");
 
-        // original feature names (for header) (dropped explicit)
+        // feature names for output csv header
         const std::vector<std::string> feature_names = {
-            "danceability", "energy", "key", "loudness", "mode", "speechiness",
+            "id", "explicit", "danceability", "energy", "key", "loudness", "mode", "speechiness",
             "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", 
             "time_signature", "year"
         };
@@ -311,6 +311,8 @@ int main(void) {
 
         // write data to csv
         for (int r = 0; r < total_rows; r++) {
+            // write IDs from ids stored during data load
+            outfile << ids[r] << ",";
             for (int f = 0; f < features_count; f++) {
                 // original features
                 outfile << all_data[r * features_count + f] << ",";
