@@ -35,5 +35,9 @@ This is actually a very solid runtime improvement from node to node, indicative 
 In comparison with the GPU implementations: This obviously runs much slower, which is what I'd expect for the CPU vs GPU runs of this code. GPU implementations of this type of project generally run much faster than strictly CPU implementations. The CPU implementation is seeing a lot more speedup, though, which could be due to the physical limitations described in that report. If we had a larger dataset that would likely be minimized.
 
 
+### Visualizations
+Visualizations for four clusters are included in the visualizations folder, plotting the 1.2mil songs in a 3d space defined by energy, danceability, and loudness.
+
+
 ### Team Task Breakdown
 I was person C, responsible for the distributed CPU implementation (#4), everything that entailed, and output visualizations. I also did some of the initial data processing (although we ended up using a C program developed by Braden for consistency on the starting data). I created a fully functional program myself and then when I regrouped with Braden I reused some of his GPU code for clustering, normalization, and convergence to ensure that we had the same output.
