@@ -22,7 +22,7 @@ int main(void) {
     int comm_sz; // threadcount
     int my_rank; // rank
     srand(42);
-    const int CLUSTERS = 4;
+    const int CLUSTERS = 8;
     const int features_count = 15; 
     const int MAX_ITERATIONS = 100; // match gpu default
     const float tol = 1e-4f; // convergence tolerance
