@@ -1,3 +1,4 @@
+## Distributed CPU Implementation - Sam Elliss
 ### CHPC Build and Exec Instructions (Distributed CPU Implementation)
 1) Upload kmeans_slurm.sh, kmeans_cpu_dist.cpp, rapidcsv.h, and tracks_features_cleaned.csv somewhere in your home directory.
 2) Edit the bash script to specifications (different account / partition, output / error files, etc).
@@ -21,3 +22,18 @@ For step 2, each process iterates through their assigned portion of songs, and f
 For step 3, MPI Allreduce is used to calculate the global cluster sums and counts for the averages. Old centroids are stored to check for convergence. Then the centroids are updated, which is done on each cluster since the compute work is pretty easy and every process needs the updated centroids anyway. Convergence is then checked by measuring the maximum change of all centroids from cycle to cycle. Steps 2 and 3 are repeated if convergence has not been reached.
 
 If convergence is reached, then the root process gathers all of the song clustering information from all threads. Then it writes the output to a csv, which looks the same as the input csv but with an extra column for the cluster a song was assigned to. Then it's done!
+
+### Scaling Study Reports
+The distributed memory CPU code was ran on the Kingspeak cluster with 2, 3, and 4 nodes. It should be noted that this is different than the GPU distributed execution, but I couldn't get my code to run with 3 or 4 nodes on Notchpeak for whatever reason. 
+
+- 2 Nodes: 1.4418s
+- 3 Nodes: 0.9448s
+- 4 Nodes: 0.7310s
+
+This is actually a very solid runtime improvement from node to node, indicative of strong scaling potential with the implementation. Almost a 2x speedup from 2 to 4 nodes. It should be noted that the timing begins with step 2, so after the data has been loaded by process 0, and is stopped after the gather has been completed. That means that the time actually measured here is almost exclusively highly parallelizeable code with the overhead removed.
+
+In comparison with the GPU implementations: This obviously runs much slower, which is what I'd expect for the CPU vs GPU runs of this code. GPU implementations of this type of project generally run much faster than strictly CPU implementations. The CPU implementation is seeing a lot more speedup, though, which could be due to the physical limitations described in that report. If we had a larger dataset that would likely be minimized.
+
+
+### Team Task Breakdown
+I was person C, responsible for the distributed CPU implementation (#4), everything that entailed, and output visualizations. I also did some of the initial data processing (although we ended up using a C program developed by Braden for consistency on the starting data). I created a fully functional program myself and then when I regrouped with Braden I reused some of his GPU code for clustering, normalization, and convergence to ensure that we had the same output.
