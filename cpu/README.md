@@ -1,6 +1,6 @@
 ## Distributed CPU Implementation - Sam Elliss
 ### CHPC Build and Exec Instructions (Distributed CPU Implementation)
-1) Upload kmeans_slurm.sh, kmeans_cpu_dist.cpp, rapidcsv.h (separate library found at https://github.com/d99kris/rapidcsv), and tracks_features_cleaned.csv somewhere in your home directory.
+1) Upload kmeans_slurm.sh, kmeans_cpu_dist.cpp, rapidcsv.h (separate library found at https://github.com/d99kris/rapidcsv), and tracks_features_cleaned.csv (can be obtained from running the csv_parser.cpp file in the pre-processing section on the source dataset from Kaggle) somewhere in your home directory.
 2) Edit the bash script to specifications (different account / partition, output / error files, etc).
 3) Open up a shell in the desired cluster (Kingspeak was my go-to).
 4) Navigate to the directory where you placed the files.
