@@ -3,12 +3,11 @@
 #SBATCH --partition=kingspeak
 #SBATCH --account=usucs6030
 #
-#SBATCH --job-name=kmeans_cpu4
-#SBATCH --output=4cpuSE.out
-#SBATCH -e 4cpuSE.err
+#SBATCH --job-name=kmeans_cpu
+#SBATCH --output=kmeans_cpu.out
+#SBATCH -e kmeans_cpu.err
 #
 
-#SBATCH --nodes=4
 #SBATCH --time=10:00
 
 cd $SLURM_SUBMIT_DIR
