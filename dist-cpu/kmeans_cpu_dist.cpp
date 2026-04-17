@@ -2,7 +2,8 @@
 // done by Sam Elliss
 // local compilation:
 // mpic++ file -o out 
-// mpiexec -n <threads> <file>
+// mpirun -n <threads> <file>
+// for CHPC running consult README.md and 'scaling studies'/run_cpu_dist.sh
 
 #include <stdio.h>
 #include <string.h>
