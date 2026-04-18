@@ -45,6 +45,8 @@ static int featureIndex(const std::string& name) {
 }
 
 static float parseSafe(const std::string& s) {
+    if (s == "True" || s == "true")  return 1.0f;
+    if (s == "False" || s == "false") return 0.0f;
     try { return std::stof(s); }
     catch (...) { return 0.0f; }
 }
