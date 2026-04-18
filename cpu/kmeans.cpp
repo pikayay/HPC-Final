@@ -154,7 +154,7 @@ initCentroids(const std::vector<std::array<float, NUM_FEATURES>>& data, int k) {
     // Simple: pick k distinct random indices
     std::vector<int> indices;
     indices.reserve(k);
-    srand((unsigned)time(nullptr));
+    srand(42);
     while ((int)indices.size() < k) {
         int idx = rand() % n;
         bool dup = false;
