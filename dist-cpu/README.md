@@ -22,7 +22,13 @@ For step 3, MPI Allreduce is used to calculate the global cluster sums and count
 
 If convergence is reached, then the root process gathers all of the song clustering information from all threads. Then it writes the output to a csv, which looks the same as the input csv but with an extra column for the cluster a song was assigned to. Then it's done!
 
-As an addendum, there may be some minor differences in results based on cores running the program (and between the various implementations), due to floating point addition imprecision. This is gone into more detail in the Validation section of the report.
+As an addendum, there may be some minor differences in results based on cores running the program (and between the various implementations), due to floating point addition imprecision. This is gone into more detail in the Validation section of the report. Here's some example output from comparing the results of the distributed CPU implementation with the distributed GPU implementation:
+
+```
+Validation passed with acceptable floating-point variance.
+Mismatches: 77 out of 1204025 (0.00640%)
+Note: Minor deviations are expected due to parallel reduction non-associativity.
+```
 
 ### Scaling Study Reports
 The distributed memory CPU code was ran on the Kingspeak cluster with 2, 3, and 4 nodes. It should be noted that this is different than the GPU distributed execution, but I couldn't get my code to run with 3 or 4 nodes on Notchpeak for whatever reason. 
