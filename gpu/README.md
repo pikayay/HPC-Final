@@ -19,7 +19,7 @@ sbatch run_dist_4.sh
 
 ### **Implementation 3: Parallel CUDA GPU (Shared Memory Alternative)**
 
-For the single GPU implementation, the host parses the dataset and flattens all features into a single 1D float array in row-major order. This flat memory layout ensures efficient and contiguous memory transfers when copying the entire dataset to the device.
+For the single GPU implementation, the host parses the dataset, normalizes the features using min-max normalization, and flattens all features into a single 1D float array in row-major order. This flat memory layout ensures efficient and contiguous memory transfers when copying the entire dataset to the device.
 
 The CUDA kernel is launched with one thread assigned to each data point. To simplify the architecture and avoid the complexity of CUDA shared memory, the kernel utilizes atomic operations. Each thread calculates the minimum squared Euclidean distance to find its closest centroid. It then uses atomicAdd to update the global device buffers that contain the cluster coordinate sums and point counts. Once the kernel finishes, the host retrieves these reduced arrays, calculates the updated centroids, and checks for convergence before launching the next iteration.
 
@@ -35,24 +35,24 @@ Each MPI rank allocates memory on its local GPU and runs the exact same assignme
 
 A block size study was conducted on the single GPU implementation to observe the impact of thread block configuration on runtime.
 
-* Block Size 32: 0.1276 s  
-* Block Size 64: 0.1256 s  
-* Block Size 128: 0.1277 s  
-* Block Size 256: 0.1247 s  
-* Block Size 512: 0.1259 s  
-* Block Size 1024: 0.1236 s
+* Block Size 32: 0.2645 s
+* Block Size 64: 0.2688 s
+* Block Size 128: 0.2684 s
+* Block Size 256: 0.2428 s
+* Block Size 512: 0.2511 s
+* Block Size 1024: 0.2637 s
 
-The performance remains largely stable across all block sizes, with a slight performance peak at 1024 threads per block. Because the arithmetic intensity of calculating Euclidean distances is relatively low and we are utilizing atomic operations in global memory, the bottleneck is primarily memory bandwidth rather than occupancy.
+The performance remains largely stable across all block sizes, with a slight performance peak at 256 threads per block. Because the arithmetic intensity of calculating Euclidean distances is relatively low and we are utilizing atomic operations in global memory, the bottleneck is primarily memory bandwidth rather than occupancy.
 
 **Node Scaling Study (Distributed GPU)**
 
-The distributed memory GPU implementation was tested across 2, 3, and 4 nodes on the Notchpeak cluster, with 10 runs per configuration to account for variance.
+The distributed memory GPU implementation was tested across 2, 3, and 4 nodes on the Notchpeak cluster, with 5 runs per configuration to account for variance.
 
-* 2 Nodes (Average of 10 runs): 0.0982 s  
-* 3 Nodes (Average of 10 runs): 0.0656 s  
-* 4 Nodes (Average of 10 runs): 0.0847 s
+* 2 Nodes (Average of 5 runs): 0.2209 s  
+* 3 Nodes (Average of 5 runs): 0.1319 s  
+* 4 Nodes (Average of 5 runs): 0.1096 s
 
-The scaling behavior reveals a hardware and network constraint on the cluster. Moving from 2 to 3 nodes shows a clear performance improvement. However, scaling to 4 nodes results in a higher average runtime. Looking closely at the 4-node data, the performance exhibited a severe bimodal distribution. Exactly half of the 10 runs finished rapidly (around 0.05 seconds), while the other half clustered at the extreme high end (over 0.12 seconds), with zero runs falling in between. This distinct split heavily indicates the execution became unpredictably network bound based on the physical location of the GPUs allocated by the SLURM scheduler. When SLURM allocates 4 nodes within the same physical rack, the MPI communication benefits from low latency switches. If the nodes are scattered across different racks, the MPI traffic must traverse the core network, exposing it to physical distance latency and cluster traffic contention which more than doubles the runtime.
+The scaling behavior shows a consistent performance improvement as more nodes are added. The transition from 2 nodes to 4 nodes cuts the execution time in half. The efficient scaling at 4 nodes in this 5-run sample indicates that the scheduler may have allocated nodes within the same physical rack, minimizing network communication overhead.
 
 ### **Validation and Numerical Precision**
 

@@ -12,4 +12,4 @@ module load gcc cuda openmpi
 cd $SLURM_SUBMIT_DIR
 
 echo "Running Single GPU with Block Size 256..."
-./kmeans_gpu_single tracks_features_cleaned.csv 8
+./kmeans_gpu_single tracks_features_cleaned.csv 4
