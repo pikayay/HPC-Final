@@ -1,3 +1,4 @@
+# REPORT
 ### **CHPC Build and Execution Instructions**
 
 ### CPU Implementations
