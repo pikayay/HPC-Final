@@ -54,6 +54,28 @@ The distributed memory GPU implementation was tested across 2, 3, and 4 nodes on
 
 The scaling behavior shows a consistent performance improvement as more nodes are added. The transition from 2 nodes to 4 nodes cuts the execution time in half. The efficient scaling at 4 nodes in this 5-run sample indicates that the scheduler may have allocated nodes within the same physical rack, minimizing network communication overhead.
 
+### **Scaling Study Comparison: Distributed CPU vs. Distributed GPU (Implementation 4 vs. 5)**
+
+To evaluate the performance differences between distributed environments, we compared the distributed memory CPU implementation (Implementation 4) against the distributed memory GPU implementation (Implementation 5). Both implementations were tested across 2, 3, and 4 nodes. 
+
+Implementation 4: Distributed CPU Runtimes
+* 2 Nodes: 1.4418 s
+* 3 Nodes: 0.9448 s
+* 4 Nodes: 0.7310 s
+
+Implementation 5: Distributed GPU Runtimes
+* 2 Nodes: 0.2209 s
+* 3 Nodes: 0.1319 s
+* 4 Nodes: 0.1096 s
+
+Analysis
+
+Both implementations exhibit strong scaling behavior, with execution times decreasing significantly as computational resources increase. The transition from 2 nodes to 4 nodes cuts the execution time nearly in half for both architectures. 
+
+However, the distributed GPU implementation is substantially faster across all node counts, running approximately 6.5 times faster than the distributed CPU implementation at both the 2 node and 4 node marks. This massive performance gap is expected. K-means clustering requires calculating the Euclidean distance between every data point and every centroid during each iteration. The highly parallel architecture of the GPU is vastly superior at handling these simultaneous calculations compared to the limited thread count of a CPU. 
+
+While the GPU is faster overall, the CPU implementation shows a slightly more consistent scaling trajectory. Because the GPU implementation calculates the distances so rapidly, the network communication overhead required by the MPI reduction steps begins to occupy a larger percentage of the total runtime, which slightly bottlenecks its scaling efficiency at higher node counts.
+
 ### **Validation and Numerical Precision**
 
 To ensure the parallel implementations produce correct results, a Python validation script compares the output CSVs against the serial baseline. 
