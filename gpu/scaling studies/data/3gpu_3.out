@@ -1,2 +1,2 @@
 Running Distributed GPU (3 GPUs)...
-K-means (MPI+CUDA) finished (converged) in 0.0703041 s
+K-means (MPI+CUDA) finished (converged) in 0.12036 s
