@@ -1,0 +1,43 @@
+====================================================================================================
+K-MEANS OPENMP SCALING STUDY
+Date:        2026-04-18 19:57:21
+Binary:      /home/dev/projects/code-projects/cs5030/HPC-Final/cpu/kmeans
+Input:       tracks_features_cleaned.csv
+k:           4
+max_iters:   100
+rows:        all
+runs/config: 3 (times averaged)
+max_threads: 8
+====================================================================================================
+
+SERIAL BASELINE
+------------------------------------------------------------
+  serial                      0.5740s      18 iters  converged=yes           speedup=  1.000x  efficiency= 100.0%  clusters=[314923, 395531, 258964, 234607]
+
+PARALLEL SCALING (OpenMP)
+----------------------------------------------------------------------------------------------------
+  config                         time        iters  converged               speedup          efficiency        clusters
+----------------------------------------------------------------------------------------------------
+  parallel (t=1)              0.5954s      18 iters  converged=yes           speedup= 0.964x  efficiency=  96.4%  clusters=[314923, 395531, 258964, 234607]
+  parallel (t=2)              0.4188s      19 iters  converged=yes           speedup= 1.370x  efficiency=  68.5%  clusters=[314979, 395533, 258923, 234590]
+  parallel (t=3)              0.3284s      19 iters  converged=yes           speedup= 1.748x  efficiency=  58.3%  clusters=[315006, 395533, 258906, 234580]
+  parallel (t=4)              0.3132s      18 iters  converged=yes           speedup= 1.833x  efficiency=  45.8%  clusters=[315003, 395533, 258905, 234584]
+  parallel (t=5)              0.2833s      18 iters  converged=yes           speedup= 2.026x  efficiency=  40.5%  clusters=[315004, 395533, 258903, 234585]
+  parallel (t=6)              0.2848s      19 iters  converged=yes           speedup= 2.015x  efficiency=  33.6%  clusters=[315003, 395533, 258901, 234588]
+  parallel (t=7)              0.2939s      19 iters  converged=yes           speedup= 1.953x  efficiency=  27.9%  clusters=[314997, 395533, 258907, 234588]
+  parallel (t=8)              0.2326s      19 iters  converged=yes           speedup= 2.468x  efficiency=  30.8%  clusters=[314996, 395533, 258908, 234588]
+
+SUMMARY TABLE
+------------------------------------------------------------
+   threads    time (s)    speedup    efficiency
+    serial      0.5740     1.000x        100.0%
+         1      0.5954     0.964x         96.4%
+         2      0.4188     1.370x         68.5%
+         3      0.3284     1.748x         58.3%
+         4      0.3132     1.833x         45.8%
+         5      0.2833     2.026x         40.5%
+         6      0.2848     2.015x         33.6%
+         7      0.2939     1.953x         27.9%
+         8      0.2326     2.468x         30.8%
+
+Peak speedup: 2.468x at 8 threads (30.8% efficiency)

@@ -170,7 +170,7 @@ initCentroids(const std::vector<std::array<float, NUM_FEATURES>>& data, int k) {
 // ---------------------------------------------------------------------------
 static std::vector<int> kmeansSerial(
     const std::vector<std::array<float, NUM_FEATURES>>& data,
-    int k, int maxIters)
+    int k, int maxIters, float tol = 1e-4f)
 {
     int n = (int)data.size();
     std::vector<int> assign(n, 0);
@@ -180,7 +180,6 @@ static std::vector<int> kmeansSerial(
 
     for (int iter = 0; iter < maxIters; ++iter) {
         // Assignment
-        int changed = 0;
         for (int i = 0; i < n; ++i) {
             float best = std::numeric_limits<float>::max();
             int bestK = 0;
@@ -188,16 +187,7 @@ static std::vector<int> kmeansSerial(
                 float d = distSq(data[i].data(), centroids[c].data());
                 if (d < best) { best = d; bestK = c; }
             }
-            if (bestK != assign[i]) { assign[i] = bestK; ++changed; }
-        }
-
-        std::cout << "[K-Means Serial] Iter " << (iter + 1) << "/" << maxIters
-                  << " — reassigned " << changed << " points\n";
-        std::cout.flush();
-
-        if (changed == 0) {
-            std::cout << "[K-Means Serial] Converged at iteration " << (iter + 1) << "\n";
-            break;
+            assign[i] = bestK;
         }
 
         // Update centroids
@@ -211,10 +201,26 @@ static std::vector<int> kmeansSerial(
                 sums[c][j] += data[i][j];
             ++counts[c];
         }
-        for (int c = 0; c < k; ++c)
+
+        float maxMove = 0.0f;
+        for (int c = 0; c < k; ++c) {
             if (counts[c] > 0)
-                for (int j = 0; j < NUM_FEATURES; ++j)
-                    centroids[c][j] = sums[c][j] / counts[c];
+                for (int j = 0; j < NUM_FEATURES; ++j) {
+                    float newVal = sums[c][j] / counts[c];
+                    float delta = std::fabs(newVal - centroids[c][j]);
+                    if (delta > maxMove) maxMove = delta;
+                    centroids[c][j] = newVal;
+                }
+        }
+
+        std::cout << "[K-Means Serial] Iter " << (iter + 1) << "/" << maxIters
+                  << " — max centroid move " << maxMove << "\n";
+        std::cout.flush();
+
+        if (maxMove < tol) {
+            std::cout << "[K-Means Serial] Converged at iteration " << (iter + 1) << "\n";
+            break;
+        }
     }
     return assign;
 }
@@ -224,7 +230,7 @@ static std::vector<int> kmeansSerial(
 // ---------------------------------------------------------------------------
 static std::vector<int> kmeansParallel(
     const std::vector<std::array<float, NUM_FEATURES>>& data,
-    int k, int maxIters, int threads)
+    int k, int maxIters, int threads, float tol = 1e-4f)
 {
     if (threads > 0) omp_set_num_threads(threads);
     int n = (int)data.size();
@@ -236,10 +242,8 @@ static std::vector<int> kmeansParallel(
               << " using " << nThreads << " threads.\n";
 
     for (int iter = 0; iter < maxIters; ++iter) {
-        int changed = 0;
-
         // --- Assignment (embarrassingly parallel) ---
-        #pragma omp parallel for reduction(+:changed) schedule(static)
+        #pragma omp parallel for schedule(static)
         for (int i = 0; i < n; ++i) {
             float best = std::numeric_limits<float>::max();
             int bestK = 0;
@@ -247,20 +251,10 @@ static std::vector<int> kmeansParallel(
                 float d = distSq(data[i].data(), centroids[c].data());
                 if (d < best) { best = d; bestK = c; }
             }
-            if (bestK != assign[i]) { assign[i] = bestK; ++changed; }
-        }
-
-        std::cout << "[K-Means Parallel] Iter " << (iter + 1) << "/" << maxIters
-                  << " — reassigned " << changed << " points\n";
-        std::cout.flush();
-
-        if (changed == 0) {
-            std::cout << "[K-Means Parallel] Converged at iteration " << (iter + 1) << "\n";
-            break;
+            assign[i] = bestK;
         }
 
         // --- Update centroids (thread-local accumulators + reduction) ---
-        // Each thread owns its own sums/counts to avoid false sharing
         int T = omp_get_max_threads();
         std::vector<std::vector<std::array<float, NUM_FEATURES>>> localSums(T,
             std::vector<std::array<float, NUM_FEATURES>>(k));
@@ -282,7 +276,8 @@ static std::vector<int> kmeansParallel(
             }
         }
 
-        // Merge thread-local results
+        // Merge thread-local results and compute max centroid movement
+        float maxMove = 0.0f;
         for (int c = 0; c < k; ++c) {
             std::array<float, NUM_FEATURES> sum; sum.fill(0.0f);
             int count = 0;
@@ -292,8 +287,21 @@ static std::vector<int> kmeansParallel(
                 count += localCounts[t][c];
             }
             if (count > 0)
-                for (int j = 0; j < NUM_FEATURES; ++j)
-                    centroids[c][j] = sum[j] / count;
+                for (int j = 0; j < NUM_FEATURES; ++j) {
+                    float newVal = sum[j] / count;
+                    float delta = std::fabs(newVal - centroids[c][j]);
+                    if (delta > maxMove) maxMove = delta;
+                    centroids[c][j] = newVal;
+                }
+        }
+
+        std::cout << "[K-Means Parallel] Iter " << (iter + 1) << "/" << maxIters
+                  << " — max centroid move " << maxMove << "\n";
+        std::cout.flush();
+
+        if (maxMove < tol) {
+            std::cout << "[K-Means Parallel] Converged at iteration " << (iter + 1) << "\n";
+            break;
         }
     }
     return assign;
