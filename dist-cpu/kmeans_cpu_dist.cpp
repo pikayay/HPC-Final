@@ -1,11 +1,9 @@
-// GOAL: implement a parallel K-Mean clustering algorithm
-// clusters are different genres.
-// challenges: domain decomposition (splitting data among cores)
-//             share centroids and update until convergence
-//             generate output and visualization
-
-// will be using MPI
-// note compile with mpic++ file -o out, run with mpiexec -n <threads> -ppn <processes-per-node> <file>
+// kmeans-clustering parallel CPU distributed memory implementation
+// done by Sam Elliss
+// local compilation:
+// mpic++ file -o out 
+// mpirun -n <threads> <file>
+// for CHPC running consult README.md and 'scaling studies'/run_cpu_dist.sh
 
 #include <stdio.h>
 #include <string.h>
@@ -22,7 +20,7 @@ int main(void) {
     int comm_sz; // threadcount
     int my_rank; // rank
     srand(42);
-    const int CLUSTERS = 4;
+    const int CLUSTERS = 8;
     const int features_count = 15; 
     const int MAX_ITERATIONS = 100; // match gpu default
     const float tol = 1e-4f; // convergence tolerance
@@ -88,7 +86,7 @@ int main(void) {
         
         printf("Read %d rows\n", total_rows);
         
-        // normalize features to 0-1 range.
+        // normalize features to 0-1 range. (code re-used from GPU implementations)
         // begin by getting the minimum and maximum of every feature
         std::vector<float> fmin(features_count, std::numeric_limits<float>::max());
         std::vector<float> fmax(features_count, -std::numeric_limits<float>::max());
@@ -110,7 +108,7 @@ int main(void) {
             }
         }
 
-        // initialize centroids by picking a random song
+        // initialize centroids by picking a random song (again, from GPU, I initially randomly gen'd centroids)
         std::vector<int> indices;
         while ((int)indices.size() < CLUSTERS) {
             int idx = rand() % total_rows;
@@ -169,6 +167,7 @@ int main(void) {
 
     if (my_rank == 0) printf("Data distributed to all processes via Scatterv.\n");
 
+    // start timer for scaling study
     double start_time = 0;
     if (my_rank == 0) start_time = MPI_Wtime();
     bool converged = false;
@@ -231,7 +230,7 @@ int main(void) {
             // empty clusters keep their old centroid values (handled by memcpy earlier)
         }
 
-        // convergence check
+        // convergence check (re-used from GPU)
         float max_move = 0.0f;
         for (int c = 0; c < CLUSTERS; c++) {
             for (int f = 0; f < features_count; ++f) {
@@ -242,7 +241,7 @@ int main(void) {
             }
         }
 
-        // report changes
+        // report changes + centroid movement
         if (my_rank == 0) {
             printf("Iteration %d, max centroid movement: %f\n", iter, max_move);
         }
@@ -254,8 +253,8 @@ int main(void) {
 
     // now that everything is clustered it's time for output:
     // that output should be one csv with the categorization of songs
-    // and a sample visualization with 3 feature axis to show clustering.
-    // so, just add a column to the csv with the assigned cluster and save.
+    // so, just add a column to the csv with the assigned cluster
+    // and re-add the IDs from earlier, and then export to csv
     
     std::vector<int> all_assignments;   // all song classifications
     std::vector<int> recvcounts;        // elements expected to receive from each process
@@ -283,6 +282,7 @@ int main(void) {
                 all_assignments.data(), recvcounts.data(), displs.data(),
                 MPI_INT, 0, MPI_COMM_WORLD);
 
+    // report runtime
     if (my_rank == 0) {
         double end_time = MPI_Wtime();
         printf("K-means finished%s in %.4f s\n",
@@ -303,7 +303,7 @@ int main(void) {
             "time_signature", "year"
         };
 
-        // write header with original features + clustering to csv
+        // write header with original features + cluster to csv
         for (const auto& name : feature_names) {
             outfile << name << ",";
         }

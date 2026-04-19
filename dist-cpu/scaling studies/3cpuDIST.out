@@ -1,0 +1,23 @@
+Read 1204025 rows
+Initial clusters broadcasted.
+Data distributed to all processes via Scatterv.
+Iteration 0, max centroid movement: 0.418877
+Iteration 1, max centroid movement: 0.198805
+Iteration 2, max centroid movement: 0.168539
+Iteration 3, max centroid movement: 0.308124
+Iteration 4, max centroid movement: 0.160724
+Iteration 5, max centroid movement: 0.079833
+Iteration 6, max centroid movement: 0.045806
+Iteration 7, max centroid movement: 0.036916
+Iteration 8, max centroid movement: 0.022573
+Iteration 9, max centroid movement: 0.011990
+Iteration 10, max centroid movement: 0.006042
+Iteration 11, max centroid movement: 0.002943
+Iteration 12, max centroid movement: 0.001343
+Iteration 13, max centroid movement: 0.000598
+Iteration 14, max centroid movement: 0.000237
+Iteration 15, max centroid movement: 0.000121
+Iteration 16, max centroid movement: 0.000032
+K-means finished (converged) in 0.9448 s
+Successfully gathered all 1204025 song assignments on rank 0.
+Output successfully written to cpu-dist-results.csv.

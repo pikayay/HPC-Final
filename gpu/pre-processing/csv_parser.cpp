@@ -64,6 +64,11 @@ int main() {
 
             // Write only indices 8 through 22
             for (int i = 8; i <= 22; ++i) {
+                // if the year is 0, set it to 2018. quick fix for one specific dataset error
+                if (i == 22) {
+                    if (columns[i] == "0") columns[i] = "2018";
+                }
+                
                 outfile << columns[i];
                 if (i < 22) {
                     outfile << ",";
