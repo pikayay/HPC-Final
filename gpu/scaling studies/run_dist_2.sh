@@ -12,4 +12,4 @@ module load gcc cuda openmpi
 cd $SLURM_SUBMIT_DIR
 
 echo "Running Distributed GPU (2 GPUs)..."
-mpirun ./kmeans_gpu_dist tracks_features_cleaned.csv 4
+mpirun ./kmeans_gpu_dist tracks_features_cleaned.csv 8
