@@ -43,8 +43,11 @@ In comparison with the GPU implementations: This obviously runs much slower, whi
 
 
 ### Visualizations
-Visualizations for four clusters are included in the visualizations folder, plotting the 1.2mil songs in a 3d space defined by energy, danceability, and loudness.
+Visualizations for the results are included in the visualizations folder. You will recall the email chain discussing it, haha. Included are:
+- The output from the visualize.py script, which recolors data to better represent the clustering in a flattened 3d space.
+- A ParaView representation of the same data, not recolored (which makes it seem messier). 
+- A ParaView visualization of three clusters in three dimensions to better show the separation of the algorithm. Clusters are much more distinctly separated here (although the consequences of the "mode" feature mean it is more so two 2D visualizations than a true 3d representation).
 
 
 ### Team Task Breakdown
-I was person C, responsible for the distributed CPU implementation (#4), everything that entailed, and output visualizations. I also did some of the initial data processing (although we ended up using a C program developed by Braden for consistency on the starting data). I created a fully functional program myself and then when I regrouped with Braden I reused some of his GPU code for clustering, normalization, and convergence to ensure that we had the same output.
+I was person C, responsible for the distributed CPU implementation (#4), everything that entailed, and output visualizations. I also did some of the initial data processing (although we ended up using a C program developed by Braden for consistency on the starting data). I discovered a small error in the starter data late into the project and patched the C program to address it. I created a fully functional clustering program myself and then when I regrouped with Braden I reused some of his GPU code for clustering, normalization, and convergence to ensure that we had the same output. Once I had access to Dillan's serial program I double checked the output again with the validation program written by Braden. Overall I would say we all did our parts and nobody was dragging the team down (besides the Canvas messaging system, which ate a few messages).
